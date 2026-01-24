@@ -1,0 +1,328 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Single user settings
+model Settings {
+  id              String   @id @default(cuid())
+  ceoFirstName    String?
+  ceoAliases      String[] // ["Eric", "E"]
+  contextPrompt   String?  @db.Text // User's vision/goals/remit
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// User for authentication (single user MVP)
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Notes from meetings/calls/reflections
+model Note {
+  id              String   @id @default(cuid())
+  title           String
+  date            DateTime
+  subtitle        String?
+  content         String   @db.Text // TipTap JSON stringified
+  
+  // CEO detection results
+  ceoMentioned    Boolean  @default(false)
+  ceoConfidence   String?  // HIGH | MED | LOW
+  ceoEvidence     String?  @db.Text
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  actions         Action[]
+  topics          TopicMention[]
+  tags            Tag[]
+  evidences       Evidence[]
+  
+  @@index([date])
+  @@index([ceoMentioned])
+}
+
+// Extracted or manual actions/tasks
+model Action {
+  id              String   @id @default(cuid())
+  activity        String   // "Send follow up to Cognizant"
+  priority        String   @default("P1") // P0 | P1 | P2
+  dueDate         DateTime?
+  status          String   @default("ACTIVE") // ACTIVE | DONE | SUGGESTED
+  sortScore       Float    @default(0)
+  
+  // CEO & standing action flags
+  isCeoRelated    Boolean  @default(false)
+  isStanding      Boolean  @default(false)
+  standingCadence String?  // WEEKLY | BIWEEKLY
+  
+  // Macro goal assignment
+  macroGoalId     String?
+  macroGoal       MacroGoal? @relation(fields: [macroGoalId], references: [id])
+  
+  // Completion tracking
+  completedAt     DateTime?
+  lastCompletedAt DateTime? // For standing actions
+  completionHistory String[] // ISO dates of completions
+  
+  // Rollover tracking
+  daysStagnant    Int      @default(0)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  evidences       Evidence[]
+  topics          ActionTopic[]
+  
+  @@index([status])
+  @@index([sortScore])
+  @@index([dueDate])
+  @@index([isCeoRelated])
+}
+
+// Evidence linking actions back to notes
+model Evidence {
+  id              String   @id @default(cuid())
+  actionId        String
+  action          Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  noteId          String
+  note            Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  excerpt         String   // Max 140 chars
+  createdAt       DateTime @default(now())
+  
+  @@index([actionId])
+  @@index([noteId])
+}
+
+// Topics extracted from notes (normalized)
+model Topic {
+  id              String   @id @default(cuid())
+  name            String   // "NVIDIA"
+  normKey         String   @unique // "nvidia"
+  category        String   // PERSON | ACCOUNT | TOPIC
+  frequency       Float    @default(0)
+  lastMentioned   DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  mentions        TopicMention[]
+  actions         ActionTopic[]
+  
+  @@index([normKey])
+  @@index([frequency])
+}
+
+// Individual topic mentions in notes
+model TopicMention {
+  id              String   @id @default(cuid())
+  topicId         String
+  topic           Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  noteId          String
+  note            Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  
+  isAsk           Boolean  @default(false) // CEO asked about this
+  isNudge         Boolean  @default(false) // CEO nudged about this
+  weight          Float    @default(1.0)
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([topicId, createdAt])
+  @@index([noteId])
+}
+
+// Many-to-many: Actions linked to Topics
+model ActionTopic {
+  actionId        String
+  action          Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  topicId         String
+  topic           Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  
+  @@id([actionId, topicId])
+}
+
+// Inferred macro goals
+model MacroGoal {
+  id              String   @id @default(cuid())
+  goal            String   // "Accelerate strategic partner revenue"
+  editedByUser    Boolean  @default(false)
+  topicKeys       String[] // Topic normKeys this goal relates to
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  actions         Action[]
+  
+  @@index([editedByUser])
+}
+
+// Tags (auto-extracted and manual)
+model Tag {
+  id              String   @id @default(cuid())
+  name            String
+  normKey         String
+  noteId          String
+  note            Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([normKey])
+  @@index([noteId])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Settings {
+  id              String   @id @default(cuid())
+  ceoFirstName    String?
+  ceoAliases      String[] // ["Eric", "E"]
+  contextPrompt   String?  @db.Text // Vision/goals/remit
+  updatedAt       DateTime @updatedAt
+}
+
+model Note {
+  id              String          @id @default(cuid())
+  title           String
+  date            DateTime
+  subtitle        String?
+  content         String          @db.Text // TipTap JSON
+  ceoMentioned    Boolean         @default(false)
+  ceoConfidence   String?         // HIGH | MED | LOW
+  ceoEvidence     String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  actions         Action[]
+  topics          TopicMention[]
+  tags            Tag[]
+  evidences       Evidence[]
+  
+  @@index([date])
+  @@index([ceoMentioned])
+}
+
+model Action {
+  id              String      @id @default(cuid())
+  activity        String      // "Send follow up to Cognizant"
+  priority        String      @default("P1") // P0 | P1 | P2
+  dueDate         DateTime?
+  status          String      @default("ACTIVE") // ACTIVE | DONE | SUGGESTED
+  sortScore       Float       @default(0)
+  
+  isCeoRelated    Boolean     @default(false)
+  isStanding      Boolean     @default(false)
+  standingCadence String?     // WEEKLY | BIWEEKLY
+  lastCompleted   DateTime?
+  completionHistory Json?     // Array of completion timestamps
+  
+  macroGoalId     String?
+  macroGoal       MacroGoal?  @relation(fields: [macroGoalId], references: [id])
+  
+  editedByUser    Boolean     @default(false)
+  completedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  evidences       Evidence[]
+  topics          ActionTopic[]
+  
+  @@index([status, sortScore])
+  @@index([isCeoRelated])
+  @@index([isStanding])
+}
+
+model Evidence {
+  id              String   @id @default(cuid())
+  actionId        String
+  action          Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  noteId          String
+  note            Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  excerpt         String   // Max 140 chars
+  createdAt       DateTime @default(now())
+  
+  @@index([actionId])
+  @@index([noteId])
+}
+
+model Topic {
+  id              String          @id @default(cuid())
+  name            String          // "NVIDIA"
+  normKey         String          @unique // "nvidia"
+  category        String          // PERSON | ACCOUNT | TOPIC
+  frequency       Float           @default(0)
+  lastMentioned   DateTime?
+  
+  mentions        TopicMention[]
+  actions         ActionTopic[]
+  
+  @@index([normKey])
+  @@index([frequency])
+}
+
+model TopicMention {
+  id              String   @id @default(cuid())
+  topicId         String
+  topic           Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  noteId          String
+  note            Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  isAsk           Boolean  @default(false) // CEO asked about this
+  isNudge         Boolean  @default(false) // CEO nudged about this
+  weight          Float    @default(1.0)
+  createdAt       DateTime @default(now())
+  
+  @@index([topicId, createdAt])
+  @@index([noteId])
+}
+
+model ActionTopic {
+  actionId        String
+  action          Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  topicId         String
+  topic           Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  
+  @@id([actionId, topicId])
+}
+
+model MacroGoal {
+  id              String   @id @default(cuid())
+  goal            String   // "Accelerate strategic partner revenue"
+  editedByUser    Boolean  @default(false)
+  topicKeys       String[] // Topic normKeys this goal relates to
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  actions         Action[]
+}
+
+model Tag {
+  id              String   @id @default(cuid())
+  name            String
+  normKey         String
+  noteId          String
+  note            Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  
+  @@index([normKey])
+  @@index([noteId])
+}
