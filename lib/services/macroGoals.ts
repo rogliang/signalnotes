@@ -2,9 +2,11 @@ import OpenAI from 'openai'
 import { prisma } from '@/lib/prisma'
 import { subDays } from 'date-fns'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+function getOpenAIClient() {
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  })
+}
 
 export interface InferredGoal {
   goal: string
@@ -122,6 +124,7 @@ Return a JSON object:
 }`
 
   try {
+    const openai = getOpenAIClient()
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
