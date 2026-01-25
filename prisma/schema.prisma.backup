@@ -1,3 +1,4 @@
+cat > prisma/schema.prisma << 'EOF'
 generator client {
   provider = "prisma-client-js"
 }
@@ -56,8 +57,6 @@ model Action {
   standingCadence String?
   macroGoalId     String?
   macroGoal       MacroGoal? @relation(fields: [macroGoalId], references: [id])
-  noteId          String?
-  note            Note?    @relation(fields: [noteId], references: [id])
   completedAt     DateTime?
   lastCompletedAt DateTime?
   completionHistory String[]
@@ -71,7 +70,6 @@ model Action {
   @@index([sortScore])
   @@index([dueDate])
   @@index([isCeoRelated])
-  @@index([noteId])
 }
 
 model Evidence {
@@ -150,3 +148,4 @@ model Tag {
   @@index([normKey])
   @@index([noteId])
 }
+EOF

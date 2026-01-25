@@ -7,9 +7,8 @@ export default function HomePage() {
   const router = useRouter()
 
   useEffect(() => {
-    // For now, just redirect to settings
-    // In Session 2, we'll create the main notes interface
-    router.push('/settings')
+    // Redirect to notes (main interface)
+    router.push('/notes')
   }, [router])
 
   return (
