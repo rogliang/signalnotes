@@ -22,6 +22,10 @@ interface Action {
   status: string
   isCeoRelated: boolean
   isStanding: boolean
+  sortScore?: number
+  createdAt: string
+  completionHistory?: string[]
+  lastCompletedAt?: string | null
   evidences: Evidence[]
   topics: Array<{
     topic: {
@@ -51,6 +55,8 @@ export default function ActionPanel({ onNoteClick, triggerRefresh }: ActionPanel
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editActivity, setEditActivity] = useState('')
   const [showAllActive, setShowAllActive] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newAction, setNewAction] = useState({ activity: '', priority: 'P1', dueDate: '' })
 
   useEffect(() => {
     fetchActions()
@@ -83,9 +89,10 @@ export default function ActionPanel({ onNoteClick, triggerRefresh }: ActionPanel
       // Reload everything
       await Promise.all([fetchActions(), fetchMacroGoals()])
       
-      alert('System refreshed! Goals and priorities updated.')
+      // Silently completed - no alert
     } catch (error) {
       console.error('Refresh error:', error)
+      // Only show alert on error
       alert(`Refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setRefreshing(false)
@@ -127,7 +134,7 @@ export default function ActionPanel({ onNoteClick, triggerRefresh }: ActionPanel
           method: 'POST',
         })
         if (!res.ok) throw new Error('Failed to complete standing action')
-        alert('Standing action completed! Due date rolled to next Monday.')
+        // Silently completed - no alert
       } else {
         // Regular action - mark done
         const res = await fetch(`/api/actions/${id}`, {
@@ -171,11 +178,90 @@ export default function ActionPanel({ onNoteClick, triggerRefresh }: ActionPanel
     }
   }
 
+  async function createManualAction() {
+    try {
+      const res = await fetch('/api/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activity: newAction.activity,
+          priority: newAction.priority,
+          dueDate: newAction.dueDate || null,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to create action')
+      
+      setShowAddForm(false)
+      setNewAction({ activity: '', priority: 'P1', dueDate: '' })
+      fetchActions()
+    } catch (error) {
+      console.error('Error creating action:', error)
+    }
+  }
+
   const activeActions = actions.filter((a) => a.status === 'ACTIVE')
   const suggestedActions = actions.filter((a) => a.status === 'SUGGESTED')
   
-  const displayedActiveActions = showAllActive ? activeActions : activeActions.slice(0, 5)
-  const hiddenCount = activeActions.length - 5
+  // Sort active actions: overdue first, then by sortScore
+  const sortedActiveActions = [...activeActions].sort((a, b) => {
+    const aOverdue = a.dueDate && new Date(a.dueDate) < new Date()
+    const bOverdue = b.dueDate && new Date(b.dueDate) < new Date()
+    
+    if (aOverdue && !bOverdue) return -1
+    if (!aOverdue && bOverdue) return 1
+    
+    return (b.sortScore || 0) - (a.sortScore || 0)
+  })
+  
+  const displayedActiveActions = showAllActive ? sortedActiveActions : sortedActiveActions.slice(0, 5)
+  const hiddenCount = sortedActiveActions.length - 5
+
+  // Helper to check if overdue
+  const isOverdue = (dueDate: string | null) => {
+    if (!dueDate) return false
+    return new Date(dueDate) < new Date()
+  }
+
+  // Helper to get days overdue
+  const getDaysOverdue = (dueDate: string | null) => {
+    if (!dueDate) return 0
+    const days = Math.floor((Date.now() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24))
+    return Math.max(0, days)
+  }
+
+  // Helper for smart date labels
+  const getSmartDateLabel = (dueDate: string | null) => {
+    if (!dueDate) return null
+    
+    const date = new Date(dueDate)
+    const today = new Date()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    const isToday = date.toDateString() === today.toDateString()
+    const isTomorrow = date.toDateString() === tomorrow.toDateString()
+    
+    if (isOverdue(dueDate)) {
+      const days = getDaysOverdue(dueDate)
+      return `⚠️ Overdue ${days} day${days !== 1 ? 's' : ''}`
+    } else if (isToday) {
+      return '📅 Due today'
+    } else if (isTomorrow) {
+      return '📅 Due tomorrow'
+    } else {
+      return `Due ${format(date, 'MMM d')}`
+    }
+  }
+
+  // Helper to check if action is stagnant (3+ days old, no progress)
+  const isStagnant = (action: Action) => {
+    const daysOpen = Math.floor((Date.now() - new Date(action.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+    return daysOpen >= 3
+  }
+
+  const getDaysOpen = (createdAt: string) => {
+    return Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24))
+  }
 
   if (loading) {
     return <div className="p-4 text-gray-500 text-sm">Loading actions...</div>
@@ -186,14 +272,69 @@ export default function ActionPanel({ onNoteClick, triggerRefresh }: ActionPanel
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold text-lg">Actions</h2>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {refreshing ? '↻ Refreshing...' : '↻ Refresh'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              + Add Action
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {refreshing ? '↻ Refreshing...' : '↻ Refresh'}
+            </button>
+          </div>
         </div>
+
+        {showAddForm && (
+          <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded space-y-2">
+            <input
+              type="text"
+              placeholder="What needs to be done?"
+              value={newAction.activity}
+              onChange={(e) => setNewAction({ ...newAction, activity: e.target.value })}
+              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+            />
+            <div className="flex gap-2">
+              <select
+                value={newAction.priority}
+                onChange={(e) => setNewAction({ ...newAction, priority: e.target.value })}
+                className="px-2 py-1 border border-gray-300 rounded text-sm"
+              >
+                <option value="P0">P0 (Urgent)</option>
+                <option value="P1">P1 (High)</option>
+                <option value="P2">P2 (Normal)</option>
+              </select>
+              <input
+                type="date"
+                value={newAction.dueDate}
+                onChange={(e) => setNewAction({ ...newAction, dueDate: e.target.value })}
+                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={createManualAction}
+                disabled={!newAction.activity.trim()}
+                className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
+              >
+                Create
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddForm(false)
+                  setNewAction({ activity: '', priority: 'P1', dueDate: '' })
+                }}
+                className="px-3 py-1 bg-gray-300 text-gray-700 rounded text-xs hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -285,12 +426,17 @@ export default function ActionPanel({ onNoteClick, triggerRefresh }: ActionPanel
                             📌 Recurring
                           </span>
                         )}
+                        {action.dueDate && isOverdue(action.dueDate) && (
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-600 text-white">
+                            🔥 Overdue
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     {action.dueDate && (
-                      <div className="text-xs text-gray-500 mb-2">
-                        Due: {format(new Date(action.dueDate), 'MMM d, yyyy')}
+                      <div className={`text-xs mb-2 ${isOverdue(action.dueDate) ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                        {getSmartDateLabel(action.dueDate)}
                       </div>
                     )}
 
@@ -322,6 +468,28 @@ export default function ActionPanel({ onNoteClick, triggerRefresh }: ActionPanel
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {isStagnant(action) && (
+                      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                        <div className="text-yellow-800 font-medium mb-1">
+                          ⏱️ Open for {getDaysOpen(action.createdAt)} days
+                        </div>
+                        <div className="text-yellow-700">Still strategically important?</div>
+                      </div>
+                    )}
+
+                    {action.isStanding && action.completionHistory && action.completionHistory.length > 0 && (
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                        <div className="text-green-800 font-medium mb-1">
+                          ✓ Completed {action.completionHistory.length} time{action.completionHistory.length !== 1 ? 's' : ''}
+                        </div>
+                        <div className="text-green-700 space-y-0.5">
+                          {action.completionHistory.slice(-3).reverse().map((date, i) => (
+                            <div key={i}>• {format(new Date(date), 'MMM d, yyyy')}</div>
+                          ))}
+                        </div>
                       </div>
                     )}
 

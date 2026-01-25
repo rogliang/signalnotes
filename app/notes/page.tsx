@@ -25,13 +25,42 @@ export default function NotesPage() {
   const [extracting, setExtracting] = useState(false)
   const [search, setSearch] = useState('')
   const [actionPanelRefresh, setActionPanelRefresh] = useState(0)
+  const [goalsExpanded, setGoalsExpanded] = useState(false)
+  const [goalsPinned, setGoalsPinned] = useState(false)
+  const [macroGoals, setMacroGoals] = useState<any[]>([])
+  const [topActions, setTopActions] = useState<any[]>([])
 
   // Auto-save timer
   const [saveTimer, setSaveTimer] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     fetchNotes()
+    fetchGoalsAndActions()
   }, [])
+
+  useEffect(() => {
+    fetchGoalsAndActions()
+  }, [actionPanelRefresh])
+
+  async function fetchGoalsAndActions() {
+    try {
+      // Fetch macro goals
+      const goalsRes = await fetch('/api/macro-goals')
+      if (goalsRes.ok) {
+        const goalsData = await goalsRes.json()
+        setMacroGoals(goalsData)
+      }
+
+      // Fetch top actions
+      const actionsRes = await fetch('/api/actions')
+      if (actionsRes.ok) {
+        const actionsData = await actionsRes.json()
+        setTopActions(actionsData.slice(0, 8)) // Top 8 actions
+      }
+    } catch (error) {
+      console.error('Error fetching goals/actions:', error)
+    }
+  }
 
   async function fetchNotes(searchQuery?: string) {
     try {
@@ -176,132 +205,232 @@ export default function NotesPage() {
   }
 
   return (
-    <div className="flex h-screen">
-      {/* Left Sidebar - Notes List */}
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-gray-50">
-        <div className="p-4 border-b border-gray-200 bg-white">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-bold">Signal Notes</h1>
-            <button
-              onClick={() => router.push('/settings')}
-              className="text-sm text-gray-600 hover:text-gray-900"
-            >
-              Settings
-            </button>
-          </div>
-          <input
-            type="text"
-            placeholder="Search notes..."
-            value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+    <div className="flex h-screen flex-col bg-gray-100">
+      {/* Top Header Bar */}
+      <div className="flex items-center justify-between px-6 py-3 border-b-2 border-gray-800 bg-white shadow-sm">
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-bold text-blue-600">📝 Signal Notes</h1>
+        </div>
+        <div className="flex items-center gap-3">
           <button
-            onClick={createNote}
-            className="w-full mt-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+            onClick={() => router.push('/settings')}
+            className="text-sm text-gray-600 hover:text-gray-900 font-medium"
           >
-            + New Note
+            Settings
+          </button>
+          <button
+            onClick={async () => {
+              const res = await fetch('/api/refresh', { method: 'POST' })
+              if (res.ok) {
+                setActionPanelRefresh((prev) => prev + 1)
+              }
+            }}
+            className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
+          >
+            ↻ Refresh
           </button>
         </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="p-4 text-gray-500 text-sm">Loading...</div>
-          ) : notes.length === 0 ? (
-            <div className="p-4 text-gray-500 text-sm">
-              {search ? 'No notes found' : 'No notes yet'}
+      {/* Main Content Area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar - Notes List */}
+        <div className="w-60 border-r-2 border-gray-300 flex flex-col bg-gray-50 shadow-md">
+          <div className="p-4 border-b border-gray-300 bg-white">
+            <input
+              type="text"
+              placeholder="Search notes..."
+              value={search}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={createNote}
+              className="w-full mt-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 font-medium shadow"
+            >
+              + New Note
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="p-4 text-gray-500 text-sm">Loading...</div>
+            ) : notes.length === 0 ? (
+              <div className="p-4 text-gray-500 text-sm">
+                {search ? 'No notes found' : 'No notes yet'}
+              </div>
+            ) : (
+              notes.map((note) => (
+                <button
+                  key={note.id}
+                  data-note-id={note.id}
+                  onClick={() => setSelectedNote(note)}
+                  className={`w-full p-3 text-left border-b border-gray-200 hover:bg-white transition-colors ${
+                    selectedNote?.id === note.id ? 'bg-white border-l-4 border-l-blue-600 shadow-sm' : ''
+                  }`}
+                >
+                  <div className="text-xs text-gray-400 mb-1 font-medium">
+                    {format(new Date(note.date), 'MMM d, yyyy')}
+                  </div>
+                  <div className="font-medium text-sm truncate text-gray-800">{note.title}</div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Right Side - Editor + Goals Panel */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-white">
+          {/* Collapsible Goals Panel */}
+          <div className="border-b-2 border-gray-300 bg-blue-50 shadow-sm">
+            {!goalsExpanded && !goalsPinned ? (
+              // Collapsed State
+              <button
+                onClick={() => setGoalsExpanded(true)}
+                className="w-full px-6 py-3 flex items-center justify-between hover:bg-blue-100 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-gray-800">
+                    🎯 {macroGoals.length} Goal{macroGoals.length !== 1 ? 's' : ''} • {topActions.length} Active Task{topActions.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <span className="text-sm text-gray-600 font-medium">Expand ▼</span>
+              </button>
+            ) : (
+              // Expanded State
+              <div className="max-h-80 overflow-y-auto bg-white border border-gray-200">
+                <div className="px-6 py-3 flex items-center justify-between border-b-2 border-gray-300 bg-blue-50">
+                  <h3 className="font-semibold text-gray-900">🎯 Strategic Goals</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setGoalsPinned(!goalsPinned)}
+                      className={`px-2 py-1 text-xs rounded font-medium ${
+                        goalsPinned ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {goalsPinned ? '📌 Pinned' : 'Pin'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setGoalsExpanded(false)
+                        setGoalsPinned(false)
+                      }}
+                      className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 rounded font-medium"
+                    >
+                      Hide ▲
+                    </button>
+                  </div>
+                </div>
+
+                <div className="px-6 py-4 space-y-4 bg-gray-50">
+                  {macroGoals.length === 0 ? (
+                    <div className="text-sm text-gray-500">
+                      No goals yet. Click Refresh to generate strategic goals.
+                    </div>
+                  ) : (
+                    macroGoals.map((goal) => (
+                      <div key={goal.id} className="space-y-2 p-3 bg-white rounded border border-gray-200 shadow-sm">
+                        <div className="font-medium text-gray-900">{goal.goal}</div>
+                        {goal.actions && goal.actions.length > 0 && (
+                          <div className="ml-4 space-y-1">
+                            {goal.actions.map((action: any) => (
+                              <div key={action.id} className="flex items-start gap-2 text-sm">
+                                <span className="text-blue-600 mt-0.5">→</span>
+                                <div className="flex-1">
+                                  <span className="text-gray-700">{action.activity}</span>
+                                  {action.isCeoRelated && (
+                                    <span className="ml-2 text-xs text-purple-600 font-semibold">⚡</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+
+                  {topActions.length > 0 && (
+                    <div className="pt-4 border-t-2 border-gray-300">
+                      <div className="font-medium text-gray-900 mb-2">Top Priority Tasks</div>
+                      <div className="space-y-1">
+                        {topActions.slice(0, 5).map((action: any) => (
+                          <div key={action.id} className="flex items-start gap-2 text-sm p-2 bg-white rounded border border-gray-200">
+                            <span className="text-gray-400 mt-0.5">•</span>
+                            <span className="text-gray-700">{action.activity}</span>
+                            {action.isCeoRelated && (
+                              <span className="text-xs text-purple-600 font-semibold">⚡</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      // TODO: Open add task modal
+                      alert('Add task feature - coming soon!')
+                    }}
+                    className="w-full py-2 text-sm text-blue-600 hover:bg-blue-50 rounded border-2 border-blue-300 font-medium"
+                  >
+                    + Add Task
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Editor Section */}
+          {selectedNote ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="px-6 py-4 border-b-2 border-gray-300 bg-white shadow-sm">
+                <input
+                  type="text"
+                  value={selectedNote.title}
+                  onChange={(e) => handleNoteChange('title', e.target.value)}
+                  className="text-2xl font-bold w-full border-none focus:outline-none mb-2 text-gray-900"
+                  placeholder="Note title"
+                />
+                <div className="flex items-center gap-4">
+                  <input
+                    type="date"
+                    value={selectedNote.date.split('T')[0]}
+                    onChange={(e) => handleNoteChange('date', new Date(e.target.value).toISOString())}
+                    className="text-sm text-gray-600 border border-gray-300 rounded px-2 py-1"
+                  />
+                  <input
+                    type="text"
+                    value={selectedNote.subtitle || ''}
+                    onChange={(e) => handleNoteChange('subtitle', e.target.value)}
+                    className="text-sm text-gray-600 flex-1 border-none focus:outline-none"
+                    placeholder="Subtitle (e.g., Eric / NVIDIA)"
+                  />
+                  <button
+                    onClick={() => deleteNote(selectedNote.id)}
+                    className="text-sm text-red-600 hover:text-red-700 font-medium"
+                  >
+                    Delete
+                  </button>
+                  {saving && <span className="text-sm text-gray-400">Saving...</span>}
+                  {extracting && <span className="text-sm text-gray-400">Saving...</span>}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-4 bg-white">
+                <TipTapEditor
+                  key={selectedNote.id}
+                  content={selectedNote.content}
+                  onChange={(content) => handleNoteChange('content', content)}
+                  placeholder="Start writing your note..."
+                />
+              </div>
             </div>
           ) : (
-            notes.map((note) => (
-              <button
-                key={note.id}
-                data-note-id={note.id}
-                onClick={() => setSelectedNote(note)}
-                className={`w-full p-4 text-left border-b border-gray-200 hover:bg-white transition-colors ${
-                  selectedNote?.id === note.id ? 'bg-white' : ''
-                }`}
-              >
-                <div className="font-medium text-sm truncate">{note.title}</div>
-                {note.subtitle && (
-                  <div className="text-xs text-gray-600 mt-1 truncate">{note.subtitle}</div>
-                )}
-                <div className="text-xs text-gray-400 mt-2">
-                  {format(new Date(note.date), 'MMM d, yyyy')}
-                </div>
-              </button>
-            ))
+            <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50">
+              Select a note or create a new one
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Center - Editor */}
-      <div className="flex-1 flex flex-col">
-        {selectedNote ? (
-          <>
-            <div className="p-6 border-b border-gray-200 bg-white">
-              <input
-                type="text"
-                value={selectedNote.title}
-                onChange={(e) => handleNoteChange('title', e.target.value)}
-                className="text-2xl font-bold w-full border-none focus:outline-none mb-2"
-                placeholder="Note title"
-              />
-              <div className="flex items-center gap-4 mb-2">
-                <input
-                  type="date"
-                  value={selectedNote.date.split('T')[0]}
-                  onChange={(e) => handleNoteChange('date', new Date(e.target.value).toISOString())}
-                  className="text-sm text-gray-600 border border-gray-300 rounded px-2 py-1"
-                />
-                <button
-                  onClick={() => deleteNote(selectedNote.id)}
-                  className="text-sm text-red-600 hover:text-red-700"
-                >
-                  Delete
-                </button>
-                {saving && <span className="text-sm text-gray-400">Saving...</span>}
-                {extracting && <span className="text-sm text-gray-400">Saving...</span>}
-              </div>
-              <input
-                type="text"
-                value={selectedNote.subtitle || ''}
-                onChange={(e) => handleNoteChange('subtitle', e.target.value)}
-                className="text-sm text-gray-600 w-full border-none focus:outline-none"
-                placeholder="Subtitle (e.g., Eric / NVIDIA)"
-              />
-            </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              <TipTapEditor
-                key={selectedNote.id}
-                content={selectedNote.content}
-                onChange={(content) => handleNoteChange('content', content)}
-                placeholder="Start writing your note..."
-              />
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400">
-            Select a note or create a new one
-          </div>
-        )}
-      </div>
-
-      {/* Right Sidebar - Actions Panel */}
-      <div className="w-96 border-l border-gray-200 bg-gray-50">
-        <ActionPanel
-          onNoteClick={(noteId) => {
-            const note = notes.find((n) => n.id === noteId)
-            if (note) {
-              setSelectedNote(note)
-              // Scroll note into view in the sidebar
-              const noteElement = document.querySelector(`[data-note-id="${noteId}"]`)
-              if (noteElement) {
-                noteElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              }
-            }
-          }}
-          triggerRefresh={actionPanelRefresh}
-        />
       </div>
     </div>
   )
