@@ -291,7 +291,7 @@ export default function NotesPage() {
               >
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold text-gray-800">
-                    🎯 {macroGoals.length} Goal{macroGoals.length !== 1 ? 's' : ''} • {topActions.length} Active Task{topActions.length !== 1 ? 's' : ''}
+                    🎯 {macroGoals.length} Goal{macroGoals.length !== 1 ? 's' : ''} • Top Priority Tasks
                   </span>
                 </div>
                 <span className="text-sm text-gray-600 font-medium">Expand ▼</span>
@@ -353,14 +353,52 @@ export default function NotesPage() {
                   {topActions.length > 0 && (
                     <div className="pt-4 border-t-2 border-gray-300">
                       <div className="font-medium text-gray-900 mb-2">Top Priority Tasks</div>
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         {topActions.slice(0, 5).map((action: any) => (
-                          <div key={action.id} className="flex items-start gap-2 text-sm p-2 bg-white rounded border border-gray-200">
-                            <span className="text-gray-400 mt-0.5">•</span>
-                            <span className="text-gray-700">{action.activity}</span>
-                            {action.isCeoRelated && (
-                              <span className="text-xs text-purple-600 font-semibold">⚡</span>
-                            )}
+                          <div key={action.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 hover:border-gray-300 transition-colors">
+                            <div className="flex items-start gap-2 flex-1">
+                              <span className="text-gray-400 mt-0.5">•</span>
+                              <span className="text-gray-700 text-sm">{action.activity}</span>
+                              {action.isCeoRelated && (
+                                <span className="text-xs text-purple-600 font-semibold">⚡</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 ml-2">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await fetch(`/api/actions/${action.id}`, {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ status: 'DONE' }),
+                                    })
+                                    fetchGoalsAndActions()
+                                  } catch (error) {
+                                    console.error('Error completing task:', error)
+                                  }
+                                }}
+                                className="p-1 text-xs text-green-600 hover:bg-green-50 rounded"
+                                title="Mark as done"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await fetch(`/api/actions/${action.id}`, {
+                                      method: 'DELETE',
+                                    })
+                                    fetchGoalsAndActions()
+                                  } catch (error) {
+                                    console.error('Error deleting task:', error)
+                                  }
+                                }}
+                                className="p-1 text-xs text-red-600 hover:bg-red-50 rounded"
+                                title="Delete"
+                              >
+                                ✕
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
