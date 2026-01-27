@@ -14,7 +14,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { activity, priority, dueDate, status, macroGoalId } = body
+    const { activity, priority, dueDate, status, macroGoalId, sortScore } = body
 
     const action = await prisma.action.update({
       where: { id: params.id },
@@ -24,6 +24,7 @@ export async function PATCH(
         dueDate: dueDate ? new Date(dueDate) : null,
         status,
         macroGoalId,
+        sortScore,
         completedAt: status === 'DONE' ? new Date() : null,
       },
     })

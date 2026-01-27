@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import TipTapEditor from '@/components/TipTapEditor'
-import ActionPanel from '@/components/ActionPanel'
+import DraggableTaskList from '@/components/DraggableTaskList'
 import { format } from 'date-fns'
 
 interface Note {
@@ -55,10 +55,65 @@ export default function NotesPage() {
       const actionsRes = await fetch('/api/actions')
       if (actionsRes.ok) {
         const actionsData = await actionsRes.json()
-        setTopActions(actionsData.slice(0, 8)) // Top 8 actions
+        // Sort by sortScore descending
+        const sorted = actionsData
+          .filter((a: any) => a.status === 'ACTIVE')
+          .sort((a: any, b: any) => (b.sortScore || 0) - (a.sortScore || 0))
+        setTopActions(sorted)
       }
     } catch (error) {
       console.error('Error fetching goals/actions:', error)
+    }
+  }
+
+  async function handleTaskReorder(reorderedTasks: any[]) {
+    try {
+      // Update sortScores based on new order
+      // Highest priority = highest score
+      const updates = reorderedTasks.map((task, index) => ({
+        id: task.id,
+        sortScore: 10000 - index * 100, // Descending scores
+      }))
+
+      // Update each task's sortScore
+      await Promise.all(
+        updates.map((update) =>
+          fetch(`/api/actions/${update.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sortScore: update.sortScore }),
+          })
+        )
+      )
+
+      // Refresh to show new order
+      fetchGoalsAndActions()
+    } catch (error) {
+      console.error('Error reordering tasks:', error)
+    }
+  }
+
+  async function handleTaskComplete(taskId: string) {
+    try {
+      await fetch(`/api/actions/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'DONE' }),
+      })
+      fetchGoalsAndActions()
+    } catch (error) {
+      console.error('Error completing task:', error)
+    }
+  }
+
+  async function handleTaskDelete(taskId: string) {
+    try {
+      await fetch(`/api/actions/${taskId}`, {
+        method: 'DELETE',
+      })
+      fetchGoalsAndActions()
+    } catch (error) {
+      console.error('Error deleting task:', error)
     }
   }
 
@@ -291,7 +346,7 @@ export default function NotesPage() {
               >
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold text-gray-800">
-                    🎯 {macroGoals.length} Goal{macroGoals.length !== 1 ? 's' : ''} • Top Priority Tasks
+                    🎯 {macroGoals.length} Goal{macroGoals.length !== 1 ? 's' : ''} • {topActions.length} Task{topActions.length !== 1 ? 's' : ''}
                   </span>
                 </div>
                 <span className="text-sm text-gray-600 font-medium">Expand ▼</span>
@@ -352,56 +407,16 @@ export default function NotesPage() {
 
                   {topActions.length > 0 && (
                     <div className="pt-4 border-t-2 border-gray-300">
-                      <div className="font-medium text-gray-900 mb-2">Top Priority Tasks</div>
-                      <div className="space-y-2">
-                        {topActions.slice(0, 5).map((action: any) => (
-                          <div key={action.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 hover:border-gray-300 transition-colors">
-                            <div className="flex items-start gap-2 flex-1">
-                              <span className="text-gray-400 mt-0.5">•</span>
-                              <span className="text-gray-700 text-sm">{action.activity}</span>
-                              {action.isCeoRelated && (
-                                <span className="text-xs text-purple-600 font-semibold">⚡</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1 ml-2">
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    await fetch(`/api/actions/${action.id}`, {
-                                      method: 'PATCH',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ status: 'DONE' }),
-                                    })
-                                    fetchGoalsAndActions()
-                                  } catch (error) {
-                                    console.error('Error completing task:', error)
-                                  }
-                                }}
-                                className="p-1 text-xs text-green-600 hover:bg-green-50 rounded"
-                                title="Mark as done"
-                              >
-                                ✓
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    await fetch(`/api/actions/${action.id}`, {
-                                      method: 'DELETE',
-                                    })
-                                    fetchGoalsAndActions()
-                                  } catch (error) {
-                                    console.error('Error deleting task:', error)
-                                  }
-                                }}
-                                className="p-1 text-xs text-red-600 hover:bg-red-50 rounded"
-                                title="Delete"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                      <div className="font-medium text-gray-900 mb-3 flex items-center justify-between">
+                        <span>All Tasks ({topActions.length})</span>
+                        <span className="text-xs text-gray-500 font-normal">Drag to reorder</span>
                       </div>
+                      <DraggableTaskList
+                        tasks={topActions}
+                        onReorder={handleTaskReorder}
+                        onComplete={handleTaskComplete}
+                        onDelete={handleTaskDelete}
+                      />
                     </div>
                   )}
 
