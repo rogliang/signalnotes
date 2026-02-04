@@ -94,6 +94,20 @@ export async function POST(
     const createdActions = []
 
     for (const extractedAction of extraction.actions) {
+      // Check if similar action already exists (including completed ones)
+      const existingAction = await prisma.action.findFirst({
+        where: {
+          noteId: note.id,
+          activity: extractedAction.activity,
+        },
+      })
+
+      // Skip if action already exists in any status
+      if (existingAction) {
+        console.log(`Skipping duplicate action: ${extractedAction.activity}`)
+        continue
+      }
+
       // Create action
       const action = await prisma.action.create({
         data: {

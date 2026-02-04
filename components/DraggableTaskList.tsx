@@ -58,11 +58,11 @@ function SortableTask({
       style={style}
       className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 hover:border-gray-300 transition-colors"
     >
-      <div className="flex items-start gap-2 flex-1">
+      <div className="flex items-center gap-2 flex-1">
         <button
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 mt-0.5"
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
           title="Drag to reorder"
         >
           ⋮⋮

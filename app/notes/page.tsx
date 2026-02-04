@@ -27,6 +27,7 @@ export default function NotesPage() {
   const [actionPanelRefresh, setActionPanelRefresh] = useState(0)
   const [tasksExpanded, setTasksExpanded] = useState(false)
   const [topActions, setTopActions] = useState<any[]>([])
+  const [refreshing, setRefreshing] = useState(false)
 
   // Auto-save timer
   const [saveTimer, setSaveTimer] = useState<NodeJS.Timeout | null>(null)
@@ -298,14 +299,17 @@ export default function NotesPage() {
           </button>
           <button
             onClick={async () => {
+              setRefreshing(true)
               const res = await fetch('/api/refresh', { method: 'POST' })
               if (res.ok) {
                 setActionPanelRefresh((prev) => prev + 1)
               }
+              setRefreshing(false)
             }}
-            className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
+            disabled={refreshing}
+            className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 font-medium disabled:opacity-50"
           >
-            ↻ Refresh
+            {refreshing ? '↻ Refreshing...' : '↻ Refresh'}
           </button>
         </div>
       </div>

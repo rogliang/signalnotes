@@ -43,7 +43,7 @@ export async function detectStandingActions(): Promise<void> {
   // Create standing actions for topics asked >= 3 times with recent ask
   for (const [topicId, data] of topicAskCounts) {
     if (data.askCount >= 3 && data.lastAsk >= fourteenDaysAgo) {
-      // Check if standing action already exists
+      // Check if standing action already exists (including completed ones)
       const existingStanding = await prisma.action.findFirst({
         where: {
           isStanding: true,
@@ -52,9 +52,7 @@ export async function detectStandingActions(): Promise<void> {
               topicId: topicId,
             },
           },
-          status: {
-            in: ['ACTIVE', 'SUGGESTED'],
-          },
+          // Don't recreate if one exists in any status (active, suggested, or done)
         },
       })
 

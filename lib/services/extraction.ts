@@ -59,14 +59,25 @@ CEO IDENTITY:
 - Aliases: ${settings.ceoAliases?.join(', ') || 'none'}
 
 Your job is to:
-1. Extract ACTION ITEMS as short imperative phrases (e.g., "Send follow up to Cognizant")
-2. Identify TOPICS (people, accounts, concepts) and normalize them
-3. Detect if the CEO is mentioned directly or indirectly
-4. Determine if topics are ASKED about or NUDGED
+1. Extract ACTION ITEMS as natural, context-rich sentences
+2. Include WHO (person/contact) and WHERE (company/account) in the activity description
+3. Identify TOPICS (people, accounts, concepts) and normalize them
+4. Detect if the CEO is mentioned directly or indirectly
+5. Determine if topics are ASKED about or NUDGED
 
-RULES:
-- Actions must be SHORT imperative phrases (5-10 words max)
-- Do NOT embed explanations in the activity string
+RULES FOR ACTIVITY DESCRIPTIONS:
+- Write as fluid, natural sentences (not short imperative phrases)
+- ALWAYS include context: who to contact, which company/account, about what topic
+- Examples of GOOD activities:
+  * "Send weekly partnership updates to John at NVIDIA regarding AI Circle integration"
+  * "Follow up with Sarah from Snowflake about Q4 revenue projections"
+  * "Schedule sync with Eric to review Prioritization Framework progress"
+- Examples of BAD activities:
+  * "Send updates" (missing: to whom? about what?)
+  * "Follow up" (missing: with whom? which company?)
+  * "Review document" (missing: which document? with whom?)
+  
+OTHER RULES:
 - Extract evidence excerpts (max 140 chars)
 - Normalize topics (e.g., "NVIDIA", "Nvidia", "NVDA" → "nvidia")
 - Categorize topics as PERSON, ACCOUNT, or TOPIC
@@ -88,7 +99,7 @@ Return a JSON object with this structure:
 {
   "actions": [
     {
-      "activity": "short imperative phrase",
+      "activity": "Natural sentence with WHO (person), WHERE (company), and WHAT (topic)",
       "suggestedPriority": "P0" | "P1" | "P2",
       "suggestedDueDate": "YYYY-MM-DD or null",
       "evidence": "excerpt from note (max 140 chars)",
