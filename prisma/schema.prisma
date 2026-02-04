@@ -8,65 +8,65 @@ datasource db {
 }
 
 model Settings {
-  id              String   @id @default(cuid())
-  ceoFirstName    String?
-  ceoAliases      String[]
-  contextPrompt   String?  @db.Text
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
-
-model User {
   id            String   @id @default(cuid())
-  email         String   @unique
-  passwordHash  String
+  ceoFirstName  String?
+  ceoAliases    String[]
+  contextPrompt String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
 
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model Note {
-  id              String   @id @default(cuid())
-  title           String
-  date            DateTime
-  subtitle        String?
-  content         String   @db.Text
-  ceoMentioned    Boolean  @default(false)
-  ceoConfidence   String?
-  ceoEvidence     String?  @db.Text
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  actions         Action[]
-  topics          TopicMention[]
-  tags            Tag[]
-  evidences       Evidence[]
-  
+  id            String         @id @default(cuid())
+  title         String
+  date          DateTime
+  subtitle      String?
+  content       String
+  ceoMentioned  Boolean        @default(false)
+  ceoConfidence String?
+  ceoEvidence   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  actions       Action[]
+  evidences     Evidence[]
+  tags          Tag[]
+  topics        TopicMention[]
+
   @@index([date])
   @@index([ceoMentioned])
 }
 
 model Action {
-  id              String   @id @default(cuid())
-  activity        String
-  priority        String   @default("P1")
-  dueDate         DateTime?
-  status          String   @default("ACTIVE")
-  sortScore       Float    @default(0)
-  isCeoRelated    Boolean  @default(false)
-  isStanding      Boolean  @default(false)
-  standingCadence String?
-  macroGoalId     String?
-  macroGoal       MacroGoal? @relation(fields: [macroGoalId], references: [id])
-  noteId          String?
-  note            Note?    @relation(fields: [noteId], references: [id])
-  completedAt     DateTime?
-  lastCompletedAt DateTime?
+  id                String        @id @default(cuid())
+  activity          String
+  priority          String        @default("P1")
+  dueDate           DateTime?
+  status            String        @default("ACTIVE")
+  sortScore         Float         @default(0)
+  isCeoRelated      Boolean       @default(false)
+  isStanding        Boolean       @default(false)
+  standingCadence   String?
+  macroGoalId       String?
+  noteId            String?
+  completedAt       DateTime?
+  lastCompletedAt   DateTime?
   completionHistory String[]
-  daysStagnant    Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  evidences       Evidence[]
-  topics          ActionTopic[]
-  
+  daysStagnant      Int           @default(0)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  macroGoal         MacroGoal?    @relation(fields: [macroGoalId], references: [id])
+  note              Note?         @relation(fields: [noteId], references: [id])
+  topics            ActionTopic[]
+  evidences         Evidence[]
+
   @@index([status])
   @@index([sortScore])
   @@index([dueDate])
@@ -75,78 +75,78 @@ model Action {
 }
 
 model Evidence {
-  id              String   @id @default(cuid())
-  actionId        String
-  action          Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
-  noteId          String
-  note            Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
-  excerpt         String
-  createdAt       DateTime @default(now())
-  
+  id        String   @id @default(cuid())
+  actionId  String
+  noteId    String
+  excerpt   String
+  createdAt DateTime @default(now())
+  action    Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
   @@index([actionId])
   @@index([noteId])
 }
 
 model Topic {
-  id              String   @id @default(cuid())
-  name            String
-  normKey         String   @unique
-  category        String
-  frequency       Float    @default(0)
-  lastMentioned   DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  mentions        TopicMention[]
-  actions         ActionTopic[]
-  
+  id            String         @id @default(cuid())
+  name          String
+  normKey       String         @unique
+  category      String
+  frequency     Float          @default(0)
+  lastMentioned DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  actions       ActionTopic[]
+  mentions      TopicMention[]
+
   @@index([normKey])
   @@index([frequency])
 }
 
 model TopicMention {
-  id              String   @id @default(cuid())
-  topicId         String
-  topic           Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  noteId          String
-  note            Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
-  isAsk           Boolean  @default(false)
-  isNudge         Boolean  @default(false)
-  weight          Float    @default(1.0)
-  createdAt       DateTime @default(now())
-  
+  id        String   @id @default(cuid())
+  topicId   String
+  noteId    String
+  isAsk     Boolean  @default(false)
+  isNudge   Boolean  @default(false)
+  weight    Float    @default(1.0)
+  createdAt DateTime @default(now())
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
   @@index([topicId, createdAt])
   @@index([noteId])
 }
 
 model ActionTopic {
-  actionId        String
-  action          Action   @relation(fields: [actionId], references: [id], onDelete: Cascade)
-  topicId         String
-  topic           Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  
+  actionId String
+  topicId  String
+  action   Action @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  topic    Topic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
   @@id([actionId, topicId])
 }
 
 model MacroGoal {
-  id              String   @id @default(cuid())
-  goal            String
-  editedByUser    Boolean  @default(false)
-  topicKeys       String[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  actions         Action[]
-  
+  id           String   @id @default(cuid())
+  goal         String
+  editedByUser Boolean  @default(false)
+  topicKeys    String[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  actions      Action[]
+
   @@index([editedByUser])
 }
 
 model Tag {
-  id              String   @id @default(cuid())
-  name            String
-  normKey         String
-  noteId          String
-  note            Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
-  createdAt       DateTime @default(now())
-  
+  id        String   @id @default(cuid())
+  name      String
+  normKey   String
+  noteId    String
+  createdAt DateTime @default(now())
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
   @@index([normKey])
   @@index([noteId])
 }

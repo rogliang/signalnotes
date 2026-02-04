@@ -101,17 +101,14 @@ export async function handleStandingActionCompletion(actionId: string): Promise<
   // Add to completion history
   const completionHistory = [...(action.completionHistory || []), new Date().toISOString()]
 
-  // Roll forward due date to next Monday
-  const nextDueDate = getNextMonday()
-
+  // Mark as DONE (don't roll forward - user wants it to disappear)
   await prisma.action.update({
     where: { id: actionId },
     data: {
-      status: 'ACTIVE', // Reset to active
-      completedAt: null, // Clear completed timestamp
+      status: 'DONE',
+      completedAt: new Date(),
       lastCompletedAt: new Date(),
       completionHistory,
-      dueDate: nextDueDate,
     },
   })
 }

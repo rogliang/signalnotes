@@ -82,7 +82,11 @@ export default function NotesPage() {
         })
       }
       
-      fetchActiveActions()
+      // Remove from UI immediately
+      setTopActions(prev => prev.filter(a => a.id !== taskId))
+      
+      // Refresh in background
+      setTimeout(() => fetchActiveActions(), 500)
     } catch (error) {
       console.error('Error completing task:', error)
     }
@@ -93,7 +97,12 @@ export default function NotesPage() {
       await fetch(`/api/actions/${taskId}`, {
         method: 'DELETE',
       })
-      fetchActiveActions()
+      
+      // Remove from UI immediately
+      setTopActions(prev => prev.filter(a => a.id !== taskId))
+      
+      // Refresh in background
+      setTimeout(() => fetchActiveActions(), 500)
     } catch (error) {
       console.error('Error deleting task:', error)
     }
@@ -386,9 +395,29 @@ export default function NotesPage() {
                     </div>
                   )}
 
-                  <button
-                    onClick={() => {
-                      alert('Add task feature - coming soon!')
+                 <button
+                    onClick={async () => {
+                      const activity = prompt('What task do you need to complete?')
+                      if (!activity?.trim()) return
+                      
+                      try {
+                        const res = await fetch('/api/actions', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            activity: activity.trim(),
+                            priority: 'P1',  // Default to P1
+                            dueDate: null,   // No due date
+                            status: 'ACTIVE',
+                          }),
+                        })
+                        
+                        if (res.ok) {
+                          fetchActiveActions()
+                        }
+                      } catch (error) {
+                        console.error('Error creating task:', error)
+                      }
                     }}
                     className="w-full mt-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded border-2 border-blue-300 font-medium"
                   >
